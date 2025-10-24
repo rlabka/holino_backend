@@ -1,17 +1,26 @@
-const mongoose = require('mongoose');
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient({
+  log: ['query', 'info', 'warn', 'error'],
+});
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/holino_db', {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-
-    console.log(`📦 MongoDB Connected: ${conn.connection.host}`);
+    await prisma.$connect();
+    console.log('📦 PostgreSQL Database Connected Successfully');
   } catch (error) {
     console.error('❌ Database connection error:', error.message);
     process.exit(1);
   }
 };
 
-module.exports = connectDB;
+const disconnectDB = async () => {
+  try {
+    await prisma.$disconnect();
+    console.log('📦 Database Disconnected');
+  } catch (error) {
+    console.error('❌ Database disconnection error:', error.message);
+  }
+};
+
+module.exports = { prisma, connectDB, disconnectDB };

@@ -1,0 +1,187 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id              String      @id @default(cuid())
+  email           String      @unique
+  username        String      @unique
+  name            String
+  profileImage    String?     // Profile image URL/path
+  phone           String?
+  postcode        String?
+  accountType     AccountType @default(PRIVAT)
+  legalForm       String?
+  industry        String?
+  companyName     String?     // Optional company name
+  businessDocuments String[]  @default([]) // Array of document URLs/paths
+  password        String
+  role            UserRole    @default(USER)
+  isActive        Boolean     @default(false)
+  isBanned        Boolean     @default(false)
+  emailVerified   Boolean     @default(false)
+  verificationToken String?   @unique
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  services         Service[]
+  bookings         Booking[]
+  reviews          Review[]
+  sentMessages     Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
+  favorites        Favorite[]
+
+  @@map("users")
+}
+
+// Service Model
+model Service {
+  id              String      @id @default(cuid())
+  title           String
+  description     String
+  category        String
+  subcategory     String?
+  price           Float
+  priceType       PriceType   @default(FIXED)     // FIXED or HOURLY
+  currency        String      @default("EUR")
+  location        String
+  latitude        Float?
+  longitude       Float?
+  distanceLimit   Int?                            // in km
+  images          String[]                        // Array of image URLs
+  languages       String[]                        // Array of languages (e.g., ["en", "de", "es"])
+  keywords        String[]                        // Array of keywords/tags
+  availability    Availability[]                  // Working days and times
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings        Booking[]
+  reviews         Review[]
+  favorites       Favorite[]
+
+  @@map("services")
+}
+
+// Availability Model - for working days and times
+model Availability {
+  id          String      @id @default(cuid())
+  dayOfWeek   Int         // 0-6 (Sunday-Saturday)
+  startTime   String      // HH:mm format (e.g., "09:00")
+  endTime     String      // HH:mm format (e.g., "18:00")
+  isAvailable Boolean     @default(true)
+  
+  // Relations
+  serviceId   String
+  service     Service     @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, dayOfWeek])
+  @@map("availabilities")
+}
+
+// Booking Model
+model Booking {
+  id          String        @id @default(cuid())
+  status      BookingStatus @default(PENDING)
+  startDate   DateTime
+  endDate     DateTime?
+  totalPrice  Float
+  notes       String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("bookings")
+}
+
+// Review Model
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5 stars
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceId]) // One review per user per service
+  @@map("reviews")
+}
+
+// Message Model
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  senderId  String
+  sender    User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver  User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// Favorite Model
+model Favorite {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, serviceId]) // One favorite per user per service
+  @@map("favorites")
+}
+
+// Enums
+enum AccountType {
+  PRIVAT
+  GEWERBLICH
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum PriceType {
+  FIXED
+  HOURLY
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}

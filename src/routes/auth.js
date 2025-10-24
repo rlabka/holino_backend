@@ -1,48 +1,104 @@
 const express = require('express');
 const router = express.Router();
+const AuthController = require('../controllers/auth.controller');
+const { authenticate } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
+const { uploadMultiple } = require('../middleware/upload');
+const {
+  registerSchema,
+  loginSchema,
+  forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  refreshTokenSchema,
+} = require('../middleware/validators/auth.validator');
 
-// POST /api/v1/auth/login
-router.post('/login', (req, res) => {
-  const { email, password } = req.body;
-  
-  if (!email || !password) {
-    return res.status(400).json({
-      error: 'Missing credentials',
-      message: 'Email and password are required'
-    });
-  }
-  
-  // TODO: Implement actual authentication logic
-  res.json({
-    message: 'Login endpoint - to be implemented',
-    email: email
-  });
-});
+/**
+ * @route   POST /api/v1/auth/register
+ * @desc    Register a new user (Privat or Gewerblich)
+ * @access  Public
+ */
+router.post(
+  '/register',
+  uploadMultiple('businessDocuments', 5),
+  registerSchema,
+  validate,
+  AuthController.register
+);
 
-// POST /api/v1/auth/register
-router.post('/register', (req, res) => {
-  const { email, password, name } = req.body;
-  
-  if (!email || !password || !name) {
-    return res.status(400).json({
-      error: 'Missing required fields',
-      message: 'Email, password, and name are required'
-    });
-  }
-  
-  // TODO: Implement actual registration logic
-  res.json({
-    message: 'Registration endpoint - to be implemented',
-    user: { email, name }
-  });
-});
+/**
+ * @route   POST /api/v1/auth/login
+ * @desc    Login user with email and password
+ * @access  Public
+ */
+router.post('/login', loginSchema, validate, AuthController.login);
 
-// POST /api/v1/auth/logout
-router.post('/logout', (req, res) => {
-  // TODO: Implement logout logic (token invalidation)
-  res.json({
-    message: 'Logout successful'
-  });
-});
+/**
+ * @route   POST /api/v1/auth/refresh
+ * @desc    Refresh access token
+ * @access  Public
+ */
+router.post('/refresh', refreshTokenSchema, validate, AuthController.refresh);
+
+/**
+ * @route   POST /api/v1/auth/forgot-password
+ * @desc    Request password reset email
+ * @access  Public
+ */
+router.post(
+  '/forgot-password',
+  forgotPasswordSchema,
+  validate,
+  AuthController.forgotPassword
+);
+
+/**
+ * @route   POST /api/v1/auth/reset-password
+ * @desc    Reset password with token
+ * @access  Public
+ */
+router.post(
+  '/reset-password',
+  resetPasswordSchema,
+  validate,
+  AuthController.resetPassword
+);
+
+/**
+ * @route   POST /api/v1/auth/verify-email
+ * @desc    Verify email address with token
+ * @access  Public
+ */
+router.post(
+  '/verify-email',
+  verifyEmailSchema,
+  validate,
+  AuthController.verifyEmail
+);
+
+/**
+ * @route   POST /api/v1/auth/resend-verification
+ * @desc    Resend verification email
+ * @access  Private
+ */
+router.post(
+  '/resend-verification',
+  authenticate,
+  AuthController.resendVerification
+);
+
+/**
+ * @route   POST /api/v1/auth/logout
+ * @desc    Logout user (client-side token removal)
+ * @access  Private
+ */
+router.post('/logout', authenticate, AuthController.logout);
+
+/**
+ * @route   GET /api/v1/auth/me
+ * @desc    Get current logged in user
+ * @access  Private
+ */
+router.get('/me', authenticate, AuthController.getMe);
 
 module.exports = router;

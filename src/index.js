@@ -1,65 +1,139 @@
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-require('dotenv').config();
 
+// Import configuration and utilities
+const config = require('./config');
+const logger = require('./utils/logger');
+const { connectDB, disconnectDB } = require('./config/database');
+
+// Import middleware
+const { 
+  securityHeaders, 
+  rateLimiter, 
+  sanitizeInput, 
+  corsOptions, 
+  requestLogger 
+} = require('./middleware/security');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+
+// Initialize Express app
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(helmet());
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
-}));
-app.use(morgan('combined'));
+// Trust proxy (important for rate limiting and getting real IP)
+app.set('trust proxy', 1);
+
+// Security middleware
+app.use(securityHeaders());
+app.use(cors(corsOptions));
+app.use(rateLimiter());
+
+// Request parsing
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Routes
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Welcome to Holino Backend API',
-    version: process.env.API_VERSION || 'v1',
-    status: 'running',
-    timestamp: new Date().toISOString()
-  });
-});
+// Serve static files (uploads)
+app.use('/uploads', express.static(config.upload.uploadPath));
 
+// Custom middleware
+app.use(requestLogger);
+app.use(sanitizeInput);
+
+// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
     uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: config.server.env,
+    version: config.server.apiVersion,
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Welcome to Holino Backend API',
+    version: config.server.apiVersion,
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    documentation: `${config.urls.backend}/api/${config.server.apiVersion}`,
   });
 });
 
 // API Routes
-app.use('/api/v1', require('./routes'));
+app.use(`/api/${config.server.apiVersion}`, require('./routes'));
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: 'Something went wrong!',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
-  });
+// 404 handler (must be after all routes)
+app.use('*', notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
+
+/**
+ * Start server
+ */
+const startServer = async () => {
+  try {
+    // Connect to database
+    await connectDB();
+    logger.info('Database connection established');
+
+    // Start HTTP server
+    const server = app.listen(config.server.port, () => {
+      logger.info(`🚀 Holino Backend server started`, {
+        port: config.server.port,
+        environment: config.server.env,
+        apiVersion: config.server.apiVersion,
+        url: `http://localhost:${config.server.port}`,
+      });
+    });
+
+    // Handle server errors
+    server.on('error', (error) => {
+      logger.error('Server error', { error: error.message });
+      process.exit(1);
+    });
+
+    return server;
+  } catch (error) {
+    logger.error('Failed to start server', { error: error.message });
+    process.exit(1);
+  }
+};
+
+/**
+ * Graceful shutdown handler
+ */
+const gracefulShutdown = async (signal) => {
+  logger.info(`${signal} received, shutting down gracefully...`);
+
+  try {
+    await disconnectDB();
+    logger.info('Database connection closed');
+    process.exit(0);
+  } catch (error) {
+    logger.error('Error during shutdown', { error: error.message });
+    process.exit(1);
+  }
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
+  gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({
-    error: 'Route not found',
-    message: `Cannot ${req.method} ${req.originalUrl}`
-  });
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection', { reason, promise });
+  gracefulShutdown('UNHANDLED_REJECTION');
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Holino Backend server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/health`);
-});
+// Start the server
+startServer();
 
 module.exports = app;
