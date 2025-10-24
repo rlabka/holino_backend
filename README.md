@@ -1,7 +1,6 @@
 # Holino Backend
 
-A modern Node.js backend API service built with Express.js and MongoDB.
-
+A modern Node.js backend API service built with Express.js and Postgreesql.
 ## 🚀 Features
 
 - **RESTful API** with Express.js
@@ -167,11 +166,3 @@ npm test
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 📞 Support
-
-If you have any questions or need help, please open an issue on GitHub.
-
----
-
-Made with ❤️ by [Your Name]
