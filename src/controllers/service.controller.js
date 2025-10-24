@@ -1,5 +1,6 @@
 const { ServiceService } = require('../services/service.service');
 const Service = require('../models/Service');
+const User = require('../models/User');
 const ApiResponse = require('../utils/response');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { ValidationError, NotFoundError } = require('../utils/errors');
@@ -19,8 +20,9 @@ class ServiceController {
     const userId = req.user.userId;
     const serviceData = req.body;
 
-    // Check if user account is activated
-    if (!req.user.isActive) {
+    // Check if user account is activated (get current data from database)
+    const currentUser = await User.findById(userId);
+    if (!currentUser || !currentUser.isActive) {
       throw new ValidationError('Account must be activated to create services. Please verify your email first.');
     }
 
