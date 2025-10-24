@@ -19,6 +19,11 @@ class ServiceController {
     const userId = req.user.userId;
     const serviceData = req.body;
 
+    // Check if user account is activated
+    if (!req.user.isActive) {
+      throw new ValidationError('Account must be activated to create services. Please verify your email first.');
+    }
+
     // Get uploaded images
     if (req.files && Array.isArray(req.files)) {
       serviceData.images = req.files.map(file => getFileUrl(file.path));
@@ -33,6 +38,14 @@ class ServiceController {
     }
     if (typeof serviceData.availability === 'string') {
       serviceData.availability = JSON.parse(serviceData.availability);
+    }
+
+    // Convert string numbers to actual numbers
+    if (serviceData.price) {
+      serviceData.price = parseFloat(serviceData.price);
+    }
+    if (serviceData.distanceLimit) {
+      serviceData.distanceLimit = parseInt(serviceData.distanceLimit);
     }
 
     const service = await ServiceService.createService(userId, serviceData);
